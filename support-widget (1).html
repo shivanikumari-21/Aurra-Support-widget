@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Support Widget Demo</title>
+<style>
+  /* ===================== CONFIG-DRIVEN DESIGN TOKENS ===================== */
+  :root{
+    --ink:        #1E2A22;   /* near-black, warmed toward green */
+    --paper:      #FBF9F4;   /* warm paper background */
+    --panel:      #FFFFFF;
+    --moss:       #2F5233;   /* primary accent — deep forest green */
+    --moss-dark:  #223D26;
+    --clay:       #C6714B;   /* secondary accent for the launcher badge */
+    --line:       #E5E0D4;
+    --muted:      #6B7268;
+    --bubble-user:#2F5233;
+    --bubble-bot: #F1EFE6;
+    --radius:     14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0; height:100%;
+    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* This backdrop only exists so the demo page has something behind the widget */
+  .demo-backdrop{
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:2rem;
+  }
+  .demo-backdrop h1{
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--muted);
+    max-width: 26ch;
+    line-height:1.5;
+  }
+
+  /* ===================== LAUNCHER ===================== */
+  #sw-launcher{
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--moss);
+    border: none;
+    cursor: pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow: 0 8px 24px rgba(47,82,51,0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    z-index: 9999;
+  }
+  #sw-launcher:hover{ transform: translateY(-2px); box-shadow: 0 10px 28px rgba(47,82,51,0.42); }
+  #sw-launcher svg{ width:26px; height:26px; }
+  #sw-launcher .sw-dot{
+    position:absolute;
+    top:-2px; right:-2px;
+    width:14px; height:14px;
+    border-radius:50%;
+    background: var(--clay);
+    border: 2px solid var(--paper);
+  }
+
+  /* ===================== PANEL ===================== */
+  #sw-panel{
+    position: fixed;
+    right: 24px;
+    bottom: 96px;
+    width: 360px;
+    max-width: calc(100vw - 32px);
+    height: 520px;
+    max-height: calc(100vh - 140px);
+    background: var(--panel);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 60px rgba(30,42,34,0.25), 0 2px 8px rgba(30,42,34,0.08);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    opacity:0;
+    transform: translateY(12px) scale(0.98);
+    pointer-events:none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 9999;
+  }
+  #sw-panel.sw-open{
+    opacity:1;
+    transform: translateY(0) scale(1);
+    pointer-events:auto;
+  }
+
+  #sw-header{
+    background: var(--moss);
+    color: #fff;
+    padding: 16px 18px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  #sw-header .sw-avatar{
+    width:34px; height:34px;
+    border-radius:50%;
+    background: rgba(255,255,255,0.15);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  #sw-header .sw-title{ font-weight:600; font-size:0.95rem; line-height:1.3; }
+  #sw-header .sw-sub{ font-size:0.78rem; opacity:0.75; display:flex; align-items:center; gap:5px; }
+  #sw-header .sw-sub::before{
+    content:""; width:6px; height:6px; border-radius:50%;
+    background:#7FD98A; display:inline-block;
+  }
+  #sw-close{
+    margin-left:auto;
+    background:none; border:none; cursor:pointer;
+    color:#fff; opacity:0.85; padding:4px;
+  }
+  #sw-close:hover{ opacity:1; }
+
+  #sw-messages{
+    flex:1;
+    overflow-y:auto;
+    padding: 16px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    background: var(--paper);
+  }
+
+  .sw-row{ display:flex; }
+  .sw-row.user{ justify-content:flex-end; }
+  .sw-bubble{
+    max-width: 80%;
+    padding: 9px 13px;
+    border-radius: 16px;
+    font-size: 0.88rem;
+    line-height:1.45;
+    white-space: pre-wrap;
+  }
+  .sw-row.bot .sw-bubble{
+    background: var(--bubble-bot);
+    color: var(--ink);
+    border-bottom-left-radius: 4px;
+  }
+  .sw-row.user .sw-bubble{
+    background: var(--bubble-user);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+
+  .sw-typing{
+    display:flex; gap:4px; padding: 10px 13px;
+    background: var(--bubble-bot);
+    border-radius:16px; border-bottom-left-radius:4px;
+    width:fit-content;
+  }
+  .sw-typing span{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--muted);
+    animation: sw-bounce 1.1s infinite ease-in-out;
+  }
+  .sw-typing span:nth-child(2){ animation-delay:0.15s; }
+  .sw-typing span:nth-child(3){ animation-delay:0.3s; }
+  @keyframes sw-bounce{
+    0%,60%,100%{ transform: translateY(0); opacity:0.5; }
+    30%{ transform: translateY(-4px); opacity:1; }
+  }
+
+  #sw-quick{
+    display:flex;
+    gap:8px;
+    padding: 0 16px 12px;
+    flex-wrap:wrap;
+    background: var(--paper);
+  }
+  .sw-chip{
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    cursor:pointer;
+    transition: border-color 0.15s ease;
+  }
+  .sw-chip:hover{ border-color: var(--moss); }
+
+  #sw-inputbar{
+    display:flex;
+    align-items:flex-end;
+    gap:8px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--line);
+    background: var(--panel);
+  }
+  #sw-input{
+    flex:1;
+    resize:none;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    max-height: 90px;
+    outline:none;
+    color: var(--ink);
+  }
+  #sw-input:focus{ border-color: var(--moss); }
+  #sw-send{
+    background: var(--moss);
+    border:none;
+    color:#fff;
+    width:38px; height:38px;
+    border-radius:10px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+    transition: background 0.15s ease, opacity 0.15s ease;
+  }
+  #sw-send:hover{ background: var(--moss-dark); }
+  #sw-send:disabled{ opacity:0.45; cursor:default; }
+
+  #sw-foot{
+    text-align:center;
+    font-size:0.68rem;
+    color: var(--muted);
+    padding: 6px 0 10px;
+    background: var(--panel);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    #sw-panel, #sw-launcher, .sw-typing span{ transition:none; animation:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-backdrop">
+  <h1>This is a stand-in for your website's content.<br>The support widget lives in the corner — try it.</h1>
+</div>
+
+<!-- ===================== LAUNCHER ===================== -->
+<button id="sw-launcher" aria-label="Open support chat">
+  <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+  </svg>
+  <span class="sw-dot"></span>
+</button>
+
+<!-- ===================== PANEL ===================== -->
+<div id="sw-panel" role="dialog" aria-label="Support chat">
+  <div id="sw-header">
+    <div class="sw-avatar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/>
+      </svg>
+    </div>
+    <div>
+      <div class="sw-title" id="sw-title-text">Support</div>
+      <div class="sw-sub">Usually replies in a minute</div>
+    </div>
+    <button id="sw-close" aria-label="Close chat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
+  <div id="sw-messages"></div>
+  <div id="sw-quick"></div>
+
+  <div id="sw-inputbar">
+    <textarea id="sw-input" rows="1" placeholder="Type your message…"></textarea>
+    <button id="sw-send" aria-label="Send message">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+    </button>
+  </div>
+  <div id="sw-foot">Powered by Claude</div>
+</div>
+
+<script>
+/* =========================================================================
+   CUSTOMER SERVICE WIDGET — CONFIG
+   Edit the block below to fit your business. Nothing else needs to change
+   unless you want to restyle it (see the CSS variables at the top of <head>).
+   ========================================================================= */
+const SW_CONFIG = {
+  businessName: "Aurra",
+  headerTitle: "Aurra Support",
+
+  // The model only knows what you tell it here — add your real policies,
+  // shipping times, return windows, FAQs, product categories, etc.
+  knowledgeBase: `
+You are a customer support assistant for Aurra, an online home decor store.
+
+Key facts:
+- Shipping: orders ship within 2 business days; standard shipping takes 5-7 business days, express takes 2-3.
+- Returns: accepted within 30 days of delivery if unused and in original packaging. Refunds go to the original payment method within 5-10 business days of us receiving the item.
+- Order tracking: customers can find tracking links in their confirmation email, or by logging into "My Orders" on the site.
+- Support hours: Monday-Friday, 9am-6pm ET. Outside these hours, let the customer know a human will follow up by email.
+- Damaged/wrong items: apologize, ask for an order number and photo, and let them know a replacement or refund will be issued once reviewed — no need for them to return the item first.
+- We do not offer live phone support, only chat and email (support@example.com).
+`,
+
+  // Suggested quick-reply chips shown above the input
+  quickReplies: [
+    "Where's my order?",
+    "What's your return policy?",
+    "I received a damaged item",
+  ],
+
+  greeting: "Hi! I'm here to help with orders, shipping, and returns. What can I help you with?",
+
+  model: "claude-sonnet-4-6",
+};
+
+/* =========================================================================
+   WIDGET LOGIC — shouldn't need edits below this line
+   ========================================================================= */
+document.getElementById('sw-title-text').textContent = SW_CONFIG.headerTitle;
+
+const launcher = document.getElementById('sw-launcher');
+const panel = document.getElementById('sw-panel');
+const closeBtn = document.getElementById('sw-close');
+const messagesEl = document.getElementById('sw-messages');
+const quickEl = document.getElementById('sw-quick');
+const input = document.getElementById('sw-input');
+const sendBtn = document.getElementById('sw-send');
+
+let conversation = []; // { role: 'user'|'assistant', content: string }
+let opened = false;
+
+function toggle(open){
+  opened = open;
+  panel.classList.toggle('sw-open', open);
+  if(open) input.focus();
+}
+launcher.addEventListener('click', () => toggle(!opened));
+closeBtn.addEventListener('click', () => toggle(false));
+
+function addBubble(role, text){
+  const row = document.createElement('div');
+  row.className = 'sw-row ' + (role === 'user' ? 'user' : 'bot');
+  const bubble = document.createElement('div');
+  bubble.className = 'sw-bubble';
+  bubble.textContent = text;
+  row.appendChild(bubble);
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return bubble;
+}
+
+function showTyping(){
+  const row = document.createElement('div');
+  row.className = 'sw-row bot';
+  row.id = 'sw-typing-row';
+  row.innerHTML = '<div class="sw-typing"><span></span><span></span><span></span></div>';
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function hideTyping(){
+  const row = document.getElementById('sw-typing-row');
+  if(row) row.remove();
+}
+
+function renderQuickReplies(){
+  quickEl.innerHTML = '';
+  SW_CONFIG.quickReplies.forEach(text => {
+    const chip = document.createElement('button');
+    chip.className = 'sw-chip';
+    chip.textContent = text;
+    chip.addEventListener('click', () => {
+      quickEl.style.display = 'none';
+      sendMessage(text);
+    });
+    quickEl.appendChild(chip);
+  });
+}
+
+async function sendMessage(text){
+  text = text.trim();
+  if(!text) return;
+
+  addBubble('user', text);
+  conversation.push({ role: 'user', content: text });
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+  showTyping();
+
+  try{
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: SW_CONFIG.model,
+        max_tokens: 1000,
+        system: SW_CONFIG.knowledgeBase + "\n\nKeep replies short, friendly, and concrete (2-4 sentences typically). If you don't know something from the info given, say a team member will follow up rather than guessing.",
+        messages: conversation,
+      })
+    });
+    const data = await response.json();
+    hideTyping();
+
+    const reply = (data.content || [])
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('\n') || "Sorry, I didn't catch that — could you try rephrasing?";
+
+    addBubble('bot', reply);
+    conversation.push({ role: 'assistant', content: reply });
+  }catch(err){
+    hideTyping();
+    addBubble('bot', "Something went wrong reaching support right now. Please try again in a moment.");
+    console.error('Support widget error:', err);
+  }finally{
+    sendBtn.disabled = false;
+  }
+}
+
+sendBtn.addEventListener('click', () => sendMessage(input.value));
+input.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendMessage(input.value);
+  }
+});
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 90) + 'px';
+});
+
+// Init
+addBubble('bot', SW_CONFIG.greeting);
+renderQuickReplies();
+</script>
+
+</body>
+</html>
